@@ -2,9 +2,13 @@ package org.lovesosa.netty.simple;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
+import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
+import io.netty.channel.ChannelPipeline;
 import io.netty.util.CharsetUtil;
+
+import java.util.concurrent.TimeUnit;
 
 /**
  * 自定义一个Handler，需要继承Netty规定好的某个HandlerAdapter
@@ -21,11 +25,47 @@ public class NettyServerHandler extends ChannelInboundHandlerAdapter {
      */
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
-        System.out.println("server ctx: " + ctx);
-        // 将msg转为ByteBuf (ByteBuf是Netty提供的)
-        ByteBuf byteBuf = (ByteBuf) msg;
-        System.out.println("客户端发送的消息是: " + byteBuf.toString(CharsetUtil.UTF_8));
-        System.out.println("客户端地址是: " + ctx.channel().remoteAddress());
+
+        // 处理一个非常耗时的任务 -> 异步执行 -> 提交到该Channel对应的 NioEventLoop
+        // 的 taskQueue中
+
+        // 当操作一个耗时任务时，还是会出现阻塞的情况
+        // 解决方案1: 用户程序自定义的普通任务
+        ctx.channel().eventLoop().execute(() -> {
+            try {
+                Thread.sleep(1000 * 10);
+                ctx.writeAndFlush(Unpooled.copiedBuffer("Hello，客户端(*^_^*)",CharsetUtil.UTF_8));
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        });
+
+        // 解决方案2: 用户自定义定时任务,该任务是提交到scheduleTaskQueue中
+        ctx.channel().eventLoop().schedule(() -> {
+            try {
+                Thread.sleep(1000 * 10);
+                ctx.writeAndFlush(Unpooled.copiedBuffer("Hello，客户端(*^_^*)",CharsetUtil.UTF_8));
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }, 5, TimeUnit.SECONDS);
+
+
+
+
+        System.out.println("go on...");
+
+//        System.out.println("服务端worker线程信息: " + Thread.currentThread().getName());
+//        System.out.println("server ctx: " + ctx);
+//        System.out.println("看channel和pipeline的关系:");
+//        Channel channel = ctx.channel();
+//        ChannelPipeline pipeline = ctx.pipeline(); // 本质是一个双向链表,出栈入栈问题
+//        // 将msg转为ByteBuf (ByteBuf是Netty提供的)
+//        ByteBuf byteBuf = (ByteBuf) msg;
+//        System.out.println("客户端发送的消息是: " + byteBuf.toString(CharsetUtil.UTF_8));
+//        System.out.println("客户端地址是: " + ctx.channel().remoteAddress());
+
+
     }
 
 
